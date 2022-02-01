@@ -1,0 +1,17 @@
+game = GamutGame('CongestionGame',
+                 '-players', '4',
+                 '-facilities', '4',
+                 '-random_params',
+                 '-normalize',
+                 '-max_payoff', f'{int(c/2)}',
+                 '-min_payoff', f'{int(-c/2)}',
+                 '-sym_funcs', '0')
+
+game = GamutGame('CovariantGame',
+                 '-players', '5',
+                 '-actions', '13',
+                 '-r', '0.9',
+                 '-random_params',
+                 '-normalize',
+                 '-max_payoff', f'{int(c/2)}',
+                 '-min_payoff', f'{int(-c/2)}')
