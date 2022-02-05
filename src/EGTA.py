@@ -10,7 +10,8 @@ TALAGRAND_MC_ERA_N = 50
 def hoeffding_bound(c: float, delta: float, stats: dict):
     m = stats['m']
     cardinality = stats['cardinality']
-    return c * np.sqrt(np.log(2 * cardinality / delta) / (2 * m))
+    log_term = np.log(2) + np.log(cardinality) - np.log(delta)  # equal to ln(2|I|/d)
+    return c * np.sqrt(log_term / (2 * m))
 
 
 def rademacher_bound(c: float, delta: float, stats: dict):
@@ -22,14 +23,13 @@ def rademacher_bound(c: float, delta: float, stats: dict):
 def bennet_union_bound(c: float, delta: float, stats: dict):
     cardinality = stats['cardinality']
     m = stats['m']
-    delta_u = delta / cardinality
+    log_term = np.log(3) + np.log(cardinality) - np.log(delta)  # equal to ln(3|I|/d)
     unbiased_e_wimpy = stats['empirical_wimpy'] * m / (m-1)
-    epsilon_v = c * c * np.log(3 / delta_u) / (m - 1) + np.sqrt(
-        ((c ** 2) * np.log(3 / delta_u) / (m - 1)) ** 2
-        + 2 * (c ** 2) * unbiased_e_wimpy * np.log(3 / delta_u) / (m - 1)
+    epsilon_v = c * c * log_term / (m - 1) + np.sqrt(
+        ((c ** 2) * log_term / (m - 1)) ** 2
+        + 2 * (c ** 2) * unbiased_e_wimpy * log_term / (m - 1)
     )
-    epsilon_mu = c * np.log(3 / delta_u) / (3 * m) \
-        + np.sqrt(2 * (unbiased_e_wimpy + epsilon_v) * np.log(3 / delta_u) / m)
+    epsilon_mu = c * log_term / (3 * m) + np.sqrt(2 * (unbiased_e_wimpy + epsilon_v) * log_term / m)
     return epsilon_mu
 
 
@@ -40,16 +40,18 @@ def talagrand_bound(c: float, delta: float, stats: dict):
     r = c
     n = TALAGRAND_MC_ERA_N
     e_wimpy = stats['empirical_wimpy']
-    era_bound = stats['centralized_mc_era'] + 2 * stats['centralized_maximum'] * np.log(4 / delta) / (3 * n * m) + \
-                np.sqrt(4 * e_wimpy * np.log(4 / delta) / (n * m))
-    lambda_bound = era_bound + 2 * r * chi * np.log(4 / delta) / (3 * m) + \
-                   np.sqrt((r * chi * np.log(4 / delta) / (np.sqrt(3) * m)) ** 2 +
-                           2 * r * chi * (era_bound + r * b_var) * np.log(4 / delta) / m)
-    wimpy_bound = m / (m - 1) * e_wimpy + r ** 2 * np.log(4 / delta) / (m - 1) + \
-                  np.sqrt(((r ** 2 * np.log(4 / delta)) / (m - 1)) ** 2 + 2 * (r ** 2) * m / (m - 1) * e_wimpy * np.log(
-                      4 / delta) / (m - 1))
-    return 2 * lambda_bound / (1 - 2 * b_var) + 2 * r * np.log(4 / delta) / (3 * m) + \
-           np.sqrt(2 * (wimpy_bound + 4 * r * lambda_bound / (1 - 2 * b_var)) * np.log(4 / delta) / m), 2 * lambda_bound / (1 - 2 * b_var)
+    u_e_wimpy = m / (m - 1) * e_wimpy
+    log_term = np.log(4) - np.log(delta)  # equal to ln(4/d)
+    era_bound = stats['centralized_mc_era'] + 2 * stats['centralized_maximum'] * log_term / (3 * n * m) + \
+        np.sqrt(4 * e_wimpy * log_term / (n * m))
+    lambda_bound = era_bound + 2 * r * chi * log_term / (3 * m) + \
+        np.sqrt((r * chi * log_term / (np.sqrt(3) * m)) ** 2 +
+                2 * r * chi * (era_bound + r * b_var) * log_term / m)
+    wimpy_bound = u_e_wimpy + r ** 2 * log_term / (m - 1) + \
+        np.sqrt(((r ** 2 * log_term) / (m - 1)) ** 2 + 2 * (r ** 2) * u_e_wimpy * log_term / (m - 1))
+    lambda_term = lambda_bound / (1 - 2 * b_var)
+    return 2 * lambda_term + 2 * r * log_term / (3 * m) + \
+        np.sqrt(2 * (wimpy_bound + 4 * r * lambda_term) * log_term / m), 2 * lambda_term
 
 
 def get_stats(sample_utils: np.ndarray, streaming=False, streaming_object=None, return_results=True,
