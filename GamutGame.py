@@ -25,27 +25,48 @@ class Action:
 class GamutGame:
     """Class for generating and accessing GAMUT games"""
 
-    def __init__(self, game_name, *args):
+    def __init__(self, game_name, c, *args):
         """Initializes GamutGame object
 
         :param game_name: Name of GAMUT game to be generated
         :param args: Command Line Arguments for game to be generated
         """
-        subprocess.call(['java', '-jar', './gamut.jar', '-g', game_name, *args, '-f', 'g.out'], shell=True)
-        with open('g.out') as f:
-            for line in f:
-                if line[0] == '#':
-                    line = line.split()
-                    if line[1] == 'Players:':
-                        self.players = int(line[2])
-                    elif line[1] == 'Actions:':
-                        self.num_actions = list(map(int, line[2:]))
-                        self.utils = np.empty((*self.num_actions, self.players))
-                else:
-                    index = line.find(']')
-                    action = tuple(map(lambda x: int(x) - 1, line[1:index].split()))
-                    util = list(map(float, line[line.find('[', index + 1) + 1:line.find(']', index + 1)].split()))
-                    self.utils[action] = util
+        self.c = c
+        if game_name == 'CustomGame':
+            # If Custom Game, args should contain only utility matrix
+            self.utils = args[0]
+            self.players = self.utils.shape[-1]
+            self.num_actions = [self.utils.shape[i] for i in range(len(self.utils.shape) - 1)]
+            return
+
+        while True:
+            subprocess.call(['java', '-jar', './gamut.jar', '-g', game_name, *args, '-f', 'g.out'], shell=True)
+            with open('g.out') as f:
+                for line in f:
+                    if line[0] == '#':
+                        line = line.split()
+                        if line[1] == 'Players:':
+                            self.players = int(line[2])
+                        elif line[1] == 'Actions:':
+                            self.num_actions = list(map(int, line[2:]))
+                            self.utils = np.empty((*self.num_actions, self.players))
+                    else:
+                        index = line.find(']')
+                        action = tuple(map(lambda x: int(x) - 1, line[1:index].split()))
+                        util = list(map(float, line[line.find('[', index + 1) + 1:line.find(']', index + 1)].split()))
+                        self.utils[action] = util
+
+            # If nan issue doesn't happen, we are done. Otherwise, create new game
+            if not np.isnan(self.utils).any():
+                break
+            print('BAD GAME, CREATING NEW GAME')
+
+    def get_c(self):
+        """Get range length of utilities, c
+
+        :return: Range length of utilities
+        """
+        return self.c
 
     def get_players(self):
         """Get the number of players

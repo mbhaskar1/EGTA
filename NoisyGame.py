@@ -7,6 +7,7 @@ import scipy.stats
 
 from DiscreteDistribution import DiscreteDistribution
 from GamutGame import GamutGame, Action
+from EmpiricalGame import EmpiricalGame
 
 
 class ChancePlayer:
@@ -37,12 +38,15 @@ class NoiseType(enum.Enum):
 
 class Noise:
     def __init__(self, factor: NoiseFactor, noise_type: NoiseType, distribution: scipy.stats.rv_continuous,
-                 dist_args: dict, agent_action_selector=0):
+                 dist_args: dict, shift=0, scale=1, agent_action_selector=0, noise_multipliers: np.ndarray = None):
         self.factor = factor
         self.noise_type = noise_type
         self.distribution = distribution
         self.dist_args = dist_args
+        self.shift = shift
+        self.scale = scale
         self.agent_action_selector = agent_action_selector
+        self.noise_multipliers = noise_multipliers
 
     # Assumes last dimension is players
     def apply_noise(self, sample_utils: np.ndarray):
@@ -61,13 +65,30 @@ class Noise:
                 .reshape(sample_utils.shape[:-1] + (1,))
         if self.factor == NoiseFactor.complete:
             rvs = self.distribution.rvs(size=sample_utils.shape, **self.dist_args)
+        rvs = rvs.astype(np.float64)
+        rvs *= self.scale
+        rvs += self.shift
+        if self.noise_multipliers is not None:
+            rvs = np.multiply(rvs, self.noise_multipliers)
         if self.noise_type == NoiseType.additive:
             sample_utils += rvs
         if self.noise_type == NoiseType.multiplicative:
             sample_utils *= rvs
 
+    def get_range(self):
+        support = self.distribution.support(**self.dist_args)
+        return self.scale * (support[1] - support[0])
 
-class EmpiricalGame:
+    def get_variance(self):
+        if self.noise_multipliers is None:
+            return np.square(self.scale) * self.distribution.var(**self.dist_args)
+        return np.square(self.noise_multipliers) * np.square(self.scale) * self.distribution.var(**self.dist_args)
+
+    def get_wimpy_variance(self):
+        return np.amax(self.get_variance())
+
+
+class NoisyGame(EmpiricalGame):
     """Extends a GamutGame by allowing for certain players to be converted to Chance Players
 
     Chance Players are players that come with a distribution over their possible actions, which can then be sampled.
@@ -87,6 +108,16 @@ class EmpiricalGame:
                                if player not in self.chance_player_indices]
         self.noise_sources = noise_sources if noise_sources is not None else []
 
+    def get_c(self):
+        """Get range length of empirical utilities (affected by noise)
+
+        :return: Range length of empirical utilities
+        """
+        c = self.game.get_c()
+        for noise in self.noise_sources:
+            c += noise.get_range()
+        return c
+
     def get_utils(self, chance_actions: List[Action], player_actions: Optional[List[Action]] = None,
                   players: Optional[List[int]] = None) -> np.ndarray:
         """Gets the utilities corresponding to certain chance actions being taken. Can also get a restricted section of
@@ -103,6 +134,15 @@ class EmpiricalGame:
         if players is None:
             players = self.player_indices
         return self.game.get_utils(actions=actions, players=players)
+
+    def get_utils_shape(self):
+        """Gets shape of utility matrix for active players
+
+        :return: Tuple of ints corresponding to shape of utility matrix
+        """
+        num_actions = self.game.get_num_actions()
+        player_actions = [num_actions[idx] for idx in self.player_indices]
+        return tuple([*player_actions, len(self.player_indices)])
 
     def sample_actions(self) -> List[Action]:
         """Samples chance actions for each chance player from their respective distributions
@@ -125,7 +165,7 @@ class EmpiricalGame:
             noise.apply_noise(sample_utils)
         return sample_utils
 
-    def expected_utils(self):
+    def expected_utilities(self):
         """Get expectation over utilities with respect to the Chance Player distributions.
 
         :return: Numpy array containing expected utilities corresponding to each combination of player actions and each player.
@@ -140,15 +180,19 @@ class EmpiricalGame:
         return expected_utils
 
     def variance_utils(self):
+        # Assuming all additive noise
         utils = self.get_utility_matrix()
         if len(self.chance_players) == 0:
-            return np.zeros(utils.shape)
-        probabilities = [np.array(player.distribution.get_probabilities(), np.longdouble)
-                         for player in self.chance_players]
-        expected_utils = self.expected_utils()
-        variance_utils = np.square(utils - expected_utils)
-        for prob_arr in probabilities:
-            variance_utils = np.tensordot(variance_utils, prob_arr, ([0], [0]))
+            variance_utils = np.zeros(utils.shape)
+        else:
+            probabilities = [np.array(player.distribution.get_probabilities(), np.longdouble)
+                             for player in self.chance_players]
+            expected_utils = self.expected_utils()
+            variance_utils = np.square(utils - expected_utils)
+            for prob_arr in probabilities:
+                variance_utils = np.tensordot(variance_utils, prob_arr, ([0], [0]))
+        for noise_source in self.noise_sources:
+            variance_utils += noise_source.get_variance()
         return variance_utils
 
     def get_utility_matrix(self):

@@ -1,0 +1,26 @@
+frequency_of_eps_pure_equilibria_by_batch(construct_empirical_game(congestion_game(2, 3, c=10),
+                                                                       complete_noise=2,
+                                                                       noise_multiplier_distribution=None),
+                                              batch_size=100)
+gs_vs_psp_single_run(construct_empirical_game(congestion_game(3, 4, c=200),
+                                                  complete_noise=100,
+                                                  noise_multiplier_distribution=scipy.stats.uniform), 10,
+                         gs_batch_size=100, gs_initial_batch_size=100)
+frequency_of_eps_pure_equilibria(construct_empirical_game(congestion_game(2, 3, c=200),
+                                                          complete_noise=100,
+                                                          noise_multiplier_distribution=scipy.stats.uniform),
+                                 sample_sizes=[100, 250, 500, 1000])
+gs_vs_psp_sample_complexities(construct_empirical_game(congestion_game(3, 4, c=200),
+                                                       complete_noise=100,
+                                                       noise_multiplier_distribution=scipy.stats.uniform),
+                              target_epsilons=[5, 5.5, 6, 7, 8.5, 10, 15, 20, 30, 40],
+                              batch_sizes=[100, 100, 100, 100, 100, 50, 10, 5, 5, 5])
+psp_frequency_of_eps_pure_equilibria(construct_empirical_game(congestion_game(2, 3, c=10),
+                                                                  complete_noise=100,
+                                                                  noise_multiplier_distribution=scipy.stats.uniform),
+                                         iterations=[1, 2, 3, 4], num_algo_runs=30, target_epsilon=2)
+regrets_distributions_by_batch(construct_empirical_game(congestion_game(3, 3, c=2),
+                                                            complete_noise=1,
+                                                            noise_multiplier_distribution=scipy.stats.uniform),
+                                   sample_sizes=[32 * 2 ** n for n in range(15)],
+                                   sample_size_labels=[f'$2^{{{5 + n}}}$' for n in range(15)])
